@@ -2,15 +2,69 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import bugRoutes from './bugRoutes.js';
 
 dotenv.config();
+
+if (!process.env.GEMINI_API_KEY) {
+  throw new Error('GEMINI_API_KEY is missing. Please set it in backend/.env or the environment');
+}
+
+const projectKey = process.env.JIRA_PROJECT_KEY;
+
+const getGeminiModel = () => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY is not set in environment variables');
+  }
+  const genAI = new GoogleGenerativeAI(apiKey);
+  return genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+};
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const envPath = path.resolve(__dirname, '.env');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use('/api', bugRoutes);
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Save Jira email to .env file
+app.post('/api/save-email', (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email || !email.includes('@')) {
+            return res.status(400).json({ error: 'A valid email is required' });
+        }
+
+        let envContent = '';
+        if (fs.existsSync(envPath)) {
+            envContent = fs.readFileSync(envPath, 'utf-8');
+        }
+
+        // Update or append JIRA_EMAIL
+        if (envContent.match(/^JIRA_EMAIL=.*/m)) {
+            envContent = envContent.replace(/^JIRA_EMAIL=.*/m, `JIRA_EMAIL=${email}`);
+        } else {
+            envContent = envContent.trimEnd() + `\nJIRA_EMAIL=${email}\n`;
+        }
+
+        fs.writeFileSync(envPath, envContent, 'utf-8');
+
+        // Reload env vars into process.env
+        dotenv.config({ path: envPath, override: true });
+
+        res.json({ success: true, email });
+    } catch (error) {
+        console.error('Failed to save email:', error.message);
+        res.status(500).json({ error: 'Failed to save email', details: error.message });
+    }
+});
 
 // Helper to encode Jira Basic Auth
 const getJiraAuthHeader = () => {
@@ -24,7 +78,7 @@ app.post('/api/log-work', async (req, res) => {
         if (!userInput) return res.status(400).json({ error: "Input is required" });
 
         // 1. Extract Data using Gemini (JSON Mode)
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const model = getGeminiModel();
         const extractPrompt = `
             Extract the following information from the text. Return JSON only.
             Fields:
