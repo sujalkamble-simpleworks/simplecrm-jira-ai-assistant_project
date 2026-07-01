@@ -21,12 +21,23 @@ const blankForm = {
   startDate: new Date().toISOString().split('T')[0],
 };
 
+const defaultLockedFields = {
+  component: false,
+  priority: false,
+  linkedWorkItem: false,
+  linkedWorkType: false,
+  account: false,
+  bugType: false,
+  assigneeAccountId: false,
+  assigneeName: false,
+  startDate: false,
+};
+
 export default function BugReporterPage() {
   const navigate = useNavigate();
   const [textareaValue, setTextareaValue] = useState('');
   const [formData, setFormData] = useState(blankForm);
   const [metadata, setMetadata] = useState({ components: [], priorities: [], labels: [], accounts: [], bugTypes: [], startDateFieldId: null });
-  const [suggestions, setSuggestions] = useState([]);
   const [assigneeSearch, setAssigneeSearch] = useState('');
   const [assigneeResults, setAssigneeResults] = useState([]);
   const [labelDropdownOpen, setLabelDropdownOpen] = useState(false);
@@ -35,24 +46,77 @@ export default function BugReporterPage() {
   const [error, setError] = useState(null);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [lockedFields, setLockedFields] = useState(() => {
+    const saved = localStorage.getItem('bugReporterLockedFields');
+    const savedValues = localStorage.getItem('bugReporterLockedValues');
+    return saved ? JSON.parse(saved) : { ...defaultLockedFields };
+  });
+  const [lockedValues, setLockedValues] = useState(() => {
+    const saved = localStorage.getItem('bugReporterLockedValues');
+    return saved ? JSON.parse(saved) : {};
+  });
 
   useEffect(() => {
     const loadMetadata = async () => {
       try {
         const response = await axios.get('http://localhost:3000/api/jira-metadata');
         setMetadata(response.data);
-        setFormData((current) => ({
-          ...current,
-          account: response.data.accounts?.[0]?.id || current.account,
-          bugType: response.data.bugTypes?.[0]?.value || current.bugType,
-          labels: current.labels.length > 0 ? current.labels : ['bug'],
-        }));
+        
+        // Apply locked values first, then defaults for unlocked fields
+        setFormData((current) => {
+          const updated = { ...current };
+          // Apply locked values if they exist
+          Object.keys(lockedValues).forEach(key => {
+            if (lockedFields[key]) {
+              updated[key] = lockedValues[key];
+            }
+          });
+          // Set defaults only for fields that are not locked
+          if (!lockedFields.account && !updated.account) {
+            updated.account = response.data.accounts?.[0]?.id || '';
+          }
+          if (!lockedFields.bugType && !updated.bugType) {
+            updated.bugType = response.data.bugTypes?.[0]?.value || 'New Bug';
+          }
+          if (updated.labels.length === 0) {
+            updated.labels = ['bug'];
+          }
+          return updated;
+        });
       } catch (err) {
         console.error(err);
       }
     };
     loadMetadata();
   }, []);
+
+  // Save locked settings to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('bugReporterLockedFields', JSON.stringify(lockedFields));
+    localStorage.setItem('bugReporterLockedValues', JSON.stringify(lockedValues));
+  }, [lockedFields, lockedValues]);
+
+  const toggleFieldLock = (field) => {
+    setLockedFields(prev => {
+      const newLocked = { ...prev, [field]: !prev[field] };
+      // If we're locking the field, save its current value
+      if (!prev[field]) {
+        setLockedValues(prevValues => ({
+          ...prevValues,
+          [field]: formData[field]
+        }));
+      }
+      return newLocked;
+    });
+  };
+
+  const resetAllLocks = () => {
+    setLockedFields({ ...defaultLockedFields });
+    setLockedValues({});
+    localStorage.removeItem('bugReporterLockedFields');
+    localStorage.removeItem('bugReporterLockedValues');
+  };
 
   const linkedEnum = useMemo(
     () => [
@@ -136,10 +200,13 @@ export default function BugReporterPage() {
   };
 
   const handleChange = (field, value) => {
-    setFormData((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    // Only allow changes if the field is not locked
+    if (!lockedFields[field]) {
+      setFormData((current) => ({
+        ...current,
+        [field]: value,
+      }));
+    }
   };
 
   const handleAssigneeChange = async (value) => {
@@ -222,26 +289,137 @@ export default function BugReporterPage() {
       <div className="bg-orb bg-orb-2"></div>
       <div className="bg-orb bg-orb-3"></div>
 
-      <div className="logtask-container" style={{ maxWidth: '900px' }}>
-        <button onClick={() => navigate('/dashboard')} className="back-button">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+      {/* Add top navigation bar with settings gear icon */}
+      <div className="dashboard-topbar">
+        <div className="topbar-brand">
+          <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
+            <rect width="40" height="40" rx="10" fill="url(#logo-grad2)" />
+            <path d="M12 20l5 5 11-11" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+            <defs>
+              <linearGradient id="logo-grad2" x1="0" y1="0" x2="40" y2="40">
+                <stop stopColor="#6366f1"/>
+                <stop offset="1" stopColor="#8b5cf6"/>
+              </linearGradient>
+            </defs>
           </svg>
-          Back to Dashboard
-        </button>
+          <span>SimpleCRM</span>
+        </div>
+        <div className="topbar-right">
+          <button 
+            onClick={() => setSettingsOpen(!settingsOpen)} 
+            className="topbar-logout"
+            style={{ marginRight: '8px' }}
+            title="Field Settings"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            Settings
+          </button>
+          <button onClick={() => navigate('/dashboard')} className="topbar-logout">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Back
+          </button>
+        </div>
+      </div>
 
+      {/* Settings Modal */}
+      {settingsOpen && (
+        <div 
+          className="settings-modal-overlay"
+          onClick={() => setSettingsOpen(false)}
+        >
+          <div 
+            className="settings-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="settings-header">
+              <h2>Field Lock Settings</h2>
+              <button 
+                onClick={() => setSettingsOpen(false)}
+                className="settings-close-btn"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <p className="settings-description">
+              Lock fields to keep their values persistent across bug reports. Locked fields will be automatically filled and cannot be modified until unlocked.
+            </p>
+            
+            <div className="settings-field-list">
+              {[
+                { key: 'component', label: 'Component' },
+                { key: 'priority', label: 'Priority' },
+                { key: 'linkedWorkItem', label: 'Linked Work Item' },
+                { key: 'linkedWorkType', label: 'Link Type (Blocks/Is blocked by/Relates to)' },
+                { key: 'account', label: 'Account' },
+                { key: 'bugType', label: 'Bug Type' },
+                { key: 'assigneeAccountId', label: 'Assignee' },
+                { key: 'startDate', label: 'Start Date' },
+              ].map(field => (
+                <label 
+                  key={field.key}
+                  className={`settings-field-item ${lockedFields[field.key] ? 'locked' : 'unlocked'}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={lockedFields[field.key]}
+                    onChange={() => toggleFieldLock(field.key)}
+                    className="settings-field-checkbox"
+                  />
+                  <div className="settings-field-content">
+                    <div className="settings-field-label">{field.label}</div>
+                    {lockedFields[field.key] && lockedValues[field.key] && (
+                      <div className="settings-field-locked-value">
+                        Locked value: {lockedValues[field.key]}
+                      </div>
+                    )}
+                  </div>
+                  {lockedFields[field.key] && (
+                    <svg className="settings-field-lock-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                    </svg>
+                  )}
+                </label>
+              ))}
+            </div>
+            
+            <div className="settings-actions">
+              <button 
+                onClick={resetAllLocks}
+                className="settings-reset-btn"
+              >
+                Reset All
+              </button>
+              <button 
+                onClick={() => setSettingsOpen(false)}
+                className="settings-save-btn"
+              >
+                Save Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="logtask-container" style={{ maxWidth: '900px', marginTop: '30px' }}>
         <div className="logtask-card">
           <div className="logtask-header">
             <div className="logtask-icon" style={{ background: 'rgba(249, 115, 22, 0.14)', color: '#f97316' }}>
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6.5 9.5a5 5 0 0 1 11 0v2.5a1 1 0 0 1-1 1H7.5a1 1 0 0 1-1-1V9.5z"/>
+                <path d="M6.5 9.5a5 5 0 0 111 0v2.5a1 1 0 0 1-1 1H7.5a1 1 0 0 1-1-1V9.5z"/>
                 <path d="M8 13.5v4.5M16 13.5v4.5"/>
                 <path d="M12 17.5v1.5"/>
               </svg>
             </div>
             <div>
               <h1>Bug Reporter</h1>
-              <p>Use AI to fill a Jira-style bug ticket. Review the preview, then confirm to create the bug.</p>
+              <p>Use AI to fill a Jira-style bug ticket. Review the preview, then confirm to create the bug. Click the Settings icon in the top bar to lock frequently used fields.</p>
             </div>
           </div>
 
@@ -310,13 +488,20 @@ export default function BugReporterPage() {
                   />
                 </div>
                 <div>
-                  <label className="logtask-label">Component *</label>
-                  <select
-                    className="logtask-textarea"
-                    value={formData.component}
-                    onChange={(e) => handleChange('component', e.target.value)}
-                    disabled={loadingSubmit}
-                  >
+                  <label className="logtask-label" style={{ display: 'flex', alignItems: 'center' }}>
+            Component *
+            {lockedFields.component && (
+              <svg className="field-locked-indicator" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+              </svg>
+            )}
+          </label>
+          <select
+            className={`logtask-textarea ${lockedFields.component ? 'locked-field-input' : ''}`}
+            value={formData.component}
+            onChange={(e) => handleChange('component', e.target.value)}
+            disabled={loadingSubmit || lockedFields.component}
+          >
                     <option value="">Select component</option>
                     {metadata.components.map((component) => (
                       <option key={component} value={component}>{component}</option>
@@ -354,12 +539,19 @@ export default function BugReporterPage() {
                   />
                 </div>
                 <div>
-                  <label className="logtask-label">Priority</label>
+                  <label className="logtask-label" style={{ display: 'flex', alignItems: 'center' }}>
+                    Priority
+                    {lockedFields.priority && (
+                      <svg className="field-locked-indicator" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                      </svg>
+                    )}
+                  </label>
                   <select
-                    className="logtask-textarea"
+                    className={`logtask-textarea ${lockedFields.priority ? 'locked-field-input' : ''}`}
                     value={formData.priority}
                     onChange={(e) => handleChange('priority', e.target.value)}
-                    disabled={loadingSubmit}
+                    disabled={loadingSubmit || lockedFields.priority}
                   >
                     <option value="">Select priority</option>
                     {metadata.priorities.map((priority) => (
@@ -368,22 +560,36 @@ export default function BugReporterPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="logtask-label">Linked Work Item</label>
+                  <label className="logtask-label" style={{ display: 'flex', alignItems: 'center' }}>
+                    Linked Work Item
+                    {lockedFields.linkedWorkItem && (
+                      <svg className="field-locked-indicator" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                      </svg>
+                    )}
+                  </label>
                   <input
-                    className="logtask-textarea"
+                    className={`logtask-textarea ${lockedFields.linkedWorkItem ? 'locked-field-input' : ''}`}
                     value={formData.linkedWorkItem}
                     onChange={(e) => handleChange('linkedWorkItem', e.target.value)}
-                    disabled={loadingSubmit}
+                    disabled={loadingSubmit || lockedFields.linkedWorkItem}
                     placeholder="PROD-5746"
                   />
                 </div>
                 <div>
-                  <label className="logtask-label">Link Type</label>
+                  <label className="logtask-label" style={{ display: 'flex', alignItems: 'center' }}>
+                    Link Type
+                    {lockedFields.linkedWorkType && (
+                      <svg className="field-locked-indicator" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                      </svg>
+                    )}
+                  </label>
                   <select
-                    className="logtask-textarea"
+                    className={`logtask-textarea ${lockedFields.linkedWorkType ? 'locked-field-input' : ''}`}
                     value={formData.linkedWorkType}
                     onChange={(e) => handleChange('linkedWorkType', e.target.value)}
-                    disabled={loadingSubmit}
+                    disabled={loadingSubmit || lockedFields.linkedWorkType}
                   >
                     {linkedEnum.map((item) => (
                       <option key={item.value} value={item.value}>{item.label}</option>
@@ -395,12 +601,19 @@ export default function BugReporterPage() {
                   <input className="logtask-textarea" value="self" disabled />
                 </div>
                 <div>
-                  <label className="logtask-label">Account</label>
+                  <label className="logtask-label" style={{ display: 'flex', alignItems: 'center' }}>
+                    Account
+                    {lockedFields.account && (
+                      <svg className="field-locked-indicator" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                      </svg>
+                    )}
+                  </label>
                   <select
-                    className="logtask-textarea"
+                    className={`logtask-textarea ${lockedFields.account ? 'locked-field-input' : ''}`}
                     value={formData.account}
                     onChange={(e) => handleChange('account', e.target.value)}
-                    disabled={loadingSubmit}
+                    disabled={loadingSubmit || lockedFields.account}
                   >
                     <option value="">Select account</option>
                     {metadata.accounts.map((account) => (
@@ -409,12 +622,19 @@ export default function BugReporterPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="logtask-label">Bug Type</label>
+                  <label className="logtask-label" style={{ display: 'flex', alignItems: 'center' }}>
+                    Bug Type
+                    {lockedFields.bugType && (
+                      <svg className="field-locked-indicator" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                      </svg>
+                    )}
+                  </label>
                   <select
-                    className="logtask-textarea"
+                    className={`logtask-textarea ${lockedFields.bugType ? 'locked-field-input' : ''}`}
                     value={formData.bugType}
                     onChange={(e) => handleChange('bugType', e.target.value)}
-                    disabled={loadingSubmit}
+                    disabled={loadingSubmit || lockedFields.bugType}
                   >
                     <option value="">Select bug type</option>
                     {metadata.bugTypes.map((type) => (
@@ -423,12 +643,19 @@ export default function BugReporterPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="logtask-label">Assignee</label>
+                  <label className="logtask-label" style={{ display: 'flex', alignItems: 'center' }}>
+                    Assignee
+                    {lockedFields.assigneeAccountId && (
+                      <svg className="field-locked-indicator" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                      </svg>
+                    )}
+                  </label>
                   <input
-                    className="logtask-textarea"
+                    className={`logtask-textarea ${lockedFields.assigneeAccountId ? 'locked-field-input' : ''}`}
                     value={formData.assigneeName}
-                    onChange={(e) => handleAssigneeChange(e.target.value)}
-                    disabled={loadingSubmit}
+                    onChange={(e) => !lockedFields.assigneeAccountId && handleAssigneeChange(e.target.value)}
+                    disabled={loadingSubmit || lockedFields.assigneeAccountId}
                     placeholder="Type assignee name"
                   />
                   {assigneeResults.length > 0 && (
@@ -456,13 +683,20 @@ export default function BugReporterPage() {
                   )}
                 </div>
                 <div>
-                  <label className="logtask-label">Start Date</label>
+                  <label className="logtask-label" style={{ display: 'flex', alignItems: 'center' }}>
+                    Start Date
+                    {lockedFields.startDate && (
+                      <svg className="field-locked-indicator" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                      </svg>
+                    )}
+                  </label>
                   <input
                     type="date"
-                    className="logtask-textarea"
+                    className={`logtask-textarea ${lockedFields.startDate ? 'locked-field-input' : ''}`}
                     value={formData.startDate}
                     onChange={(e) => handleChange('startDate', e.target.value)}
-                    disabled={loadingSubmit}
+                    disabled={loadingSubmit || lockedFields.startDate}
                   />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
