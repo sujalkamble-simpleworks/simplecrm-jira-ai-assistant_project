@@ -157,7 +157,29 @@ router.post('/parse-bug', async (req, res) => {
     const validBugTypes = metadata?.bugTypes?.map((type) => type.value).join(', ') || '';
     const cleanedInput = safeText(userInput);
 
-    const prompt = `Extract the bug report details from the following user text. Return JSON only.
+    const prompt = `I am working as a QA tester for a CRM application.
+I will provide bugs in raw format.
+
+Convert them into proper Jira Bug format using the following structure exactly:
+
+Summary in summary
+Description in description section only
+Expected Result in description section only
+Actual Result in description section only
+Acceptance Criteria in acceptanceCriteria section only
+Steps to Reproduce in stepsToReproduce section only
+
+Formatting Rules:
+ dont add the heading of JSON  below in text
+ Use plain text titles (no **markdown**). Examples: Description:, Expected Result:, Actual Result:, Acceptance Criteria:, Steps to Reproduce:
+ Do not add horizontal lines
+Keep language simple and professional
+Do not change bug meaning
+Add numbering in Steps to Reproduce
+Keep Acceptance Criteria clear and measurable
+Do not add extra sections unless provided and also add expected and actual result inside description field
+
+Return JSON only in this exact schema:
 {
   "summary": string,
   "description": string,
@@ -184,6 +206,7 @@ If the text does not mention a field, return an empty string or empty array. Alw
 If the text mentions a date for when the bug should be addressed or when it was found, return startDate in YYYY-MM-DD format.
 
 Text: "${cleanedInput}"`;
+
 
     const model = getGeminiModel();
     const extractResult = await model.generateContent({

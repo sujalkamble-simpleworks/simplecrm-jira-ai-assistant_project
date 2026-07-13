@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 /* ============================================
@@ -52,8 +53,6 @@
 /* ============================================
    GLOBAL RESETS
    ============================================ */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 * {
   margin: 0;
   padding: 0;
@@ -338,19 +337,24 @@ body {
   position: relative;
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
+  background: linear-gradient(135deg, rgba(15, 15, 26, 0.95), rgba(21, 24, 42, 0.98));
 }
 
 .dashboard-topbar {
-  position: relative;
-  z-index: 1;
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 32px;
-  background: var(--bg-surface);
-  backdrop-filter: blur(16px);
+  padding: 14px 24px;
+  background: rgba(10, 12, 22, 0.88);
+  backdrop-filter: blur(18px);
   border-bottom: 1px solid var(--border);
   animation: slideDown 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 @keyframes slideDown {
@@ -368,26 +372,40 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
+  letter-spacing: 0.2px;
+}
+
+.topbar-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: white;
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.26);
 }
 
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .topbar-email {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
-  padding: 6px 14px;
+  padding: 7px 12px;
   background: rgba(255, 255, 255, 0.04);
-  border-radius: 99px;
+  border-radius: 999px;
   border: 1px solid var(--border);
 }
 
@@ -395,22 +413,22 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
   font-family: var(--font-sans);
-  color: var(--text-muted);
-  background: transparent;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 6px 14px;
+  border-radius: 999px;
+  padding: 7px 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .topbar-logout:hover {
-  color: var(--error);
-  border-color: var(--error-border);
-  background: var(--error-bg);
+  color: var(--primary);
+  border-color: var(--border-hover);
+  background: rgba(99, 102, 241, 0.12);
 }
 
 .dashboard-content {
@@ -419,15 +437,39 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 24px;
+  padding: 40px 24px 24px;
   position: relative;
   z-index: 1;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
 }
 
 .dashboard-header {
-  text-align: center;
-  margin-bottom: 48px;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 24px;
+  padding: 24px 28px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(20, 22, 36, 0.8);
   animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+}
+
+.dashboard-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--primary);
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  margin-bottom: 10px;
 }
 
 @keyframes fadeUp {
@@ -442,26 +484,22 @@ body {
 }
 
 .dashboard-header h1 {
-  font-size: 32px;
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: -0.5px;
-  margin-bottom: 8px;
-  background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  letter-spacing: -0.4px;
+  margin-bottom: 6px;
+  color: var(--text-primary);
 }
 
 .dashboard-header p {
-  font-size: 16px;
+  font-size: 14px;
   color: var(--text-muted);
 }
 
 .dashboard-cards {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
-  max-width: 700px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
   width: 100%;
   animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
 }
@@ -474,23 +512,25 @@ body {
 
 .action-card {
   position: relative;
-  padding: 32px 28px;
-  background: var(--bg-surface);
+  padding: 24px 22px;
+  background: linear-gradient(180deg, rgba(20, 22, 36, 0.95), rgba(16, 18, 30, 0.95));
   backdrop-filter: blur(16px);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border-left: 3px solid transparent;
+  border-radius: 16px;
+  transition: all 0.25s ease;
   overflow: hidden;
+  min-height: 220px;
 }
 
 .action-card::before {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, var(--primary-light), transparent);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), transparent);
   opacity: 0;
-  transition: opacity 0.3s;
+  transition: opacity 0.25s ease;
 }
 
 .action-card-active {
@@ -499,8 +539,9 @@ body {
 
 .action-card-active:hover {
   border-color: var(--border-hover);
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-md), var(--shadow-glow);
+  border-left-color: var(--primary);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
 }
 
 .action-card-active:hover::before {
@@ -515,29 +556,29 @@ body {
 .action-card-icon {
   position: relative;
   z-index: 1;
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radius-md);
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .action-icon-tempo {
-  background: var(--primary-light);
+  background: rgba(99, 102, 241, 0.16);
   color: var(--primary);
 }
 
 .action-icon-bug {
-  background: var(--warning-bg);
+  background: rgba(245, 158, 11, 0.16);
   color: var(--warning-text);
 }
 
 .action-card h2 {
   position: relative;
   z-index: 1;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 8px;
@@ -558,17 +599,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 16px;
+  padding-top: 14px;
   border-top: 1px solid var(--border);
 }
 
 .action-badge {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 4px 12px;
-  border-radius: 99px;
+  padding: 4px 10px;
+  border-radius: 999px;
 }
 
 .action-badge-active {
@@ -585,7 +626,7 @@ body {
 
 .action-card-footer svg {
   color: var(--text-muted);
-  transition: transform 0.3s ease, color 0.3s;
+  transition: transform 0.2s ease, color 0.2s ease;
 }
 
 .action-card-active:hover .action-card-footer svg {
@@ -599,9 +640,10 @@ body {
 .logtask-page {
   min-height: 100vh;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0 24px 24px;
   position: relative;
 }
 
@@ -609,7 +651,9 @@ body {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 640px;
+  max-width: 720px;
+  margin-top: 24px;
+  align-self: center;
   animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -642,32 +686,46 @@ body {
 }
 
 .logtask-card {
-  background: var(--bg-surface);
+  background: linear-gradient(180deg, rgba(20, 22, 36, 0.95), rgba(16, 18, 30, 0.95));
   backdrop-filter: blur(24px) saturate(1.5);
   -webkit-backdrop-filter: blur(24px) saturate(1.5);
   border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  padding: 36px;
-  box-shadow: var(--shadow-lg), var(--shadow-glow);
+  border-radius: 18px;
+  padding: 28px;
+  box-shadow: var(--shadow-lg);
 }
 
 .logtask-header {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 28px;
+  gap: 14px;
+  margin-bottom: 24px;
 }
 
 .logtask-icon {
   flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-md);
-  background: var(--primary-light);
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, 0.16);
   color: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.logtask-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
 }
 
 .logtask-header h1 {
@@ -689,11 +747,11 @@ body {
 }
 
 .logtask-label {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
 }
 
 .logtask-textarea {
@@ -704,10 +762,10 @@ body {
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: 12px;
   outline: none;
   resize: vertical;
-  min-height: 100px;
+  min-height: 112px;
   transition: all 0.25s ease;
   line-height: 1.6;
 }
@@ -732,15 +790,15 @@ body {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  width: 100%;
-  padding: 14px 20px;
-  font-size: 15px;
+  width: auto;
+  padding: 12px 16px;
+  font-size: 14px;
   font-weight: 600;
   font-family: var(--font-sans);
   color: #fff;
   background: linear-gradient(135deg, var(--primary), var(--accent));
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: 999px;
   cursor: pointer;
   transition: all 0.25s ease;
   box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
@@ -749,7 +807,7 @@ body {
 
 .logtask-submit:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 25px rgba(99, 102, 241, 0.45);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
 }
 
 .logtask-submit:active:not(:disabled) {
@@ -771,7 +829,7 @@ body {
   color: var(--error);
   background: var(--error-bg);
   border: 1px solid var(--error-border);
-  border-radius: var(--radius-md);
+  border-radius: 12px;
   animation: shake 0.4s ease;
 }
 
@@ -782,10 +840,10 @@ body {
 
 .logtask-success {
   margin-top: 24px;
-  padding: 24px;
+  padding: 20px;
   background: var(--success-bg);
   border: 1px solid var(--success-border);
-  border-radius: var(--radius-md);
+  border-radius: 12px;
   animation: fadeUp 0.4s ease both;
 }
 
@@ -793,17 +851,17 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--success);
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .logtask-result-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 14px;
+  margin-bottom: 14px;
 }
 
 @media (max-width: 480px) {
@@ -827,13 +885,13 @@ body {
 }
 
 .result-value {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .logtask-description {
-  padding-top: 16px;
+  padding-top: 14px;
   border-top: 1px solid var(--success-border);
 }
 
@@ -1006,6 +1064,79 @@ body {
 .settings-save-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 25px rgba(99, 102, 241, 0.45);
+}
+
+/* Admin environment management styles */
+.admin-page {
+  min-height: 100vh;
+}
+
+.admin-card {
+  max-width: 460px;
+}
+
+.admin-env-page {
+  padding-bottom: 40px;
+}
+
+.admin-env-content {
+  max-width: 1100px;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+.admin-env-header {
+  margin-bottom: 20px;
+}
+
+.admin-env-card {
+  width: 100%;
+  background: linear-gradient(180deg, rgba(20, 22, 36, 0.95), rgba(16, 18, 30, 0.95));
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: var(--shadow-lg);
+}
+
+.admin-env-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.admin-env-toolbar h2 {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+.admin-env-toolbar p {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.admin-env-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.admin-env-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-env-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.admin-env-row .login-input {
+  padding-left: 14px;
 }
 
 /* Locked field indicators in main form */

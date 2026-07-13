@@ -35,7 +35,23 @@ const defaultLockedFields = {
 
 export default function BugReporterPage() {
   const navigate = useNavigate();
+  const [email, setEmail] = useState('');
   const [textareaValue, setTextareaValue] = useState('');
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('jira_email');
+    if (!savedEmail) {
+      navigate('/');
+      return;
+    }
+    setEmail(savedEmail);
+  }, [navigate]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('jira_email');
+    navigate('/');
+  };
+
   const [formData, setFormData] = useState(blankForm);
   const [metadata, setMetadata] = useState({ components: [], priorities: [], labels: [], accounts: [], bugTypes: [], startDateFieldId: null });
   const [assigneeSearch, setAssigneeSearch] = useState('');
@@ -305,6 +321,12 @@ export default function BugReporterPage() {
           <span>SimpleCRM</span>
         </div>
         <div className="topbar-right">
+          <div className="topbar-email">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+            {email}
+          </div>
           <button 
             onClick={() => setSettingsOpen(!settingsOpen)} 
             className="topbar-logout"
@@ -317,11 +339,17 @@ export default function BugReporterPage() {
             </svg>
             Settings
           </button>
-          <button onClick={() => navigate('/dashboard')} className="topbar-logout">
+          <button onClick={() => navigate('/dashboard')} className="topbar-logout" style={{ marginRight: '8px' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
             </svg>
             Back
+          </button>
+          <button onClick={handleLogout} className="topbar-logout">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Disconnect
           </button>
         </div>
       </div>

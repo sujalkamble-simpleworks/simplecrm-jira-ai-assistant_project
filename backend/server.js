@@ -7,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import bugRoutes from './bugRoutes.js';
+import { readEnvFile, updateEnvFile, writeEnvFile } from './envFile.js';
 
 dotenv.config();
 
@@ -34,7 +35,9 @@ app.use(cors());
 app.use(express.json());
 app.use('/api', bugRoutes);
 
-// Save Jira email to .env file
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+
 app.post('/api/save-email', (req, res) => {
     try {
         const { email } = req.body;
@@ -42,19 +45,7 @@ app.post('/api/save-email', (req, res) => {
             return res.status(400).json({ error: 'A valid email is required' });
         }
 
-        let envContent = '';
-        if (fs.existsSync(envPath)) {
-            envContent = fs.readFileSync(envPath, 'utf-8');
-        }
-
-        // Update or append JIRA_EMAIL
-        if (envContent.match(/^JIRA_EMAIL=.*/m)) {
-            envContent = envContent.replace(/^JIRA_EMAIL=.*/m, `JIRA_EMAIL=${email}`);
-        } else {
-            envContent = envContent.trimEnd() + `\nJIRA_EMAIL=${email}\n`;
-        }
-
-        fs.writeFileSync(envPath, envContent, 'utf-8');
+        updateEnvFile(envPath, 'JIRA_EMAIL', email);
 
         // Reload env vars into process.env
         dotenv.config({ path: envPath, override: true });
@@ -63,6 +54,45 @@ app.post('/api/save-email', (req, res) => {
     } catch (error) {
         console.error('Failed to save email:', error.message);
         res.status(500).json({ error: 'Failed to save email', details: error.message });
+    }
+});
+
+app.post('/api/admin/login', (req, res) => {
+    const { username, password } = req.body || {};
+
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+        return res.json({ success: true });
+    }
+
+    return res.status(401).json({ error: 'Invalid admin credentials' });
+});
+
+app.get('/api/admin/env', (req, res) => {
+    try {
+        const entries = readEnvFile(envPath);
+        res.json({ success: true, entries });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to read environment variables', details: error.message });
+    }
+});
+
+app.post('/api/admin/env', (req, res) => {
+    try {
+        const { entries } = req.body || {};
+        if (!Array.isArray(entries)) {
+            return res.status(400).json({ error: 'entries must be an array' });
+        }
+
+        const normalized = entries
+            .filter((entry) => entry && entry.key)
+            .map((entry) => ({ key: String(entry.key).trim(), value: String(entry.value ?? '') }));
+
+        writeEnvFile(normalized, envPath);
+        dotenv.config({ path: envPath, override: true });
+
+        res.json({ success: true, entries: normalized });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to save environment variables', details: error.message });
     }
 });
 
@@ -100,7 +130,7 @@ app.post('/api/log-work', async (req, res) => {
         // 2. Generate Professional Description
         const descPrompt = `
             Convert the following QA activity into a professional Tempo worklog.
-            Rules: 2 to 4 concise sentences. Professional language. Suitable for Jira Tempo. Mention validation/testing if relevant. Do not exaggerate.
+Rules: 2 to 4 concise sentences. Professional language. Suitable for Jira Tempo. Mention validation/testing if relevant. Do not use markdown (no **bold**, no headings). Do not exaggerate.
             Activity: ${parsedData.activityDescription}
         `;
         const descResult = await model.generateContent(descPrompt);

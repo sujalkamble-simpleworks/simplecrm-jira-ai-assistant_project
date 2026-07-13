@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -7,7 +7,22 @@ export default function LogTaskPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [email, setEmail] = useState('');
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('jira_email');
+    if (!savedEmail) {
+      navigate('/');
+      return;
+    }
+    setEmail(savedEmail);
+  }, [navigate]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('jira_email');
+    navigate('/');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -37,14 +52,45 @@ export default function LogTaskPage() {
       <div className="bg-orb bg-orb-2"></div>
       <div className="bg-orb bg-orb-3"></div>
 
-      <div className="logtask-container">
-        {/* Back button */}
-        <button onClick={() => navigate('/dashboard')} className="back-button">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+      {/* Top bar */}
+      <div className="dashboard-topbar">
+        <div className="topbar-brand">
+          <div className="topbar-brand-mark">J</div>
+          <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
+            <rect width="40" height="40" rx="10" fill="url(#logo-grad2)" />
+            <path d="M12 20l5 5 11-11" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+            <defs>
+              <linearGradient id="logo-grad2" x1="0" y1="0" x2="40" y2="40">
+                <stop stopColor="#6366f1"/>
+                <stop offset="1" stopColor="#8b5cf6"/>
+              </linearGradient>
+            </defs>
           </svg>
-          Back to Dashboard
-        </button>
+          <span>SimpleCRM Workspace</span>
+        </div>
+        <div className="topbar-right">
+          <div className="topbar-email">
+             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+               <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+             </svg>
+             {email}
+           </div>
+          <button onClick={() => navigate('/dashboard')} className="topbar-logout" style={{ marginRight: '8px' }}>
+             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+               <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+             </svg>
+             Back
+           </button>
+           <button onClick={handleLogout} className="topbar-logout">
+             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+               <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+             </svg>
+             Disconnect
+           </button>
+        </div>
+      </div>
+
+      <div className="logtask-container">
 
         <div className="logtask-card">
           <div className="logtask-header">
@@ -54,8 +100,9 @@ export default function LogTaskPage() {
               </svg>
             </div>
             <div>
+              <div className="logtask-pill">Tempo • Jira-ready</div>
               <h1>AI Tempo Worklog Assistant</h1>
-              <p>Describe your work and we'll generate a professional Tempo worklog</p>
+              <p>Describe your work and we’ll generate a professional Tempo worklog in seconds.</p>
             </div>
           </div>
 

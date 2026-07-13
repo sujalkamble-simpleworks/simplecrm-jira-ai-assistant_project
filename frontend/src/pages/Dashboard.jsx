@@ -60,8 +60,9 @@ export default function Dashboard() {
       {/* Main content */}
       <div className="dashboard-content">
         <div className="dashboard-header">
+          <div className="dashboard-pill">Jira workspace</div>
           <h1>What would you like to do?</h1>
-          <p>Choose an action to get started with your Jira workflow</p>
+          <p>Choose a workflow to keep engineering work moving from one place.</p>
         </div>
 
         <div className="dashboard-cards">
