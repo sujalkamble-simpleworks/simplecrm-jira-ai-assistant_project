@@ -3,6 +3,7 @@ import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import LogTaskPage from './pages/LogTaskPage';
 import BugReporterPage from './pages/BugReporterPage';
+import TestcasesPage from './pages/TestcasesPage';
 import AdminPage from './pages/AdminPage';
 import './App.css';
 
@@ -13,6 +14,7 @@ function App() {
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/log-task" element={<LogTaskPage />} />
       <Route path="/bug-reporter" element={<BugReporterPage />} />
+      <Route path="/testcases" element={<TestcasesPage />} />
       <Route path="/admin" element={<AdminPage />} />
     </Routes>
   );

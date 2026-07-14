@@ -1,8 +1,14 @@
 import express from 'express';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { google } from 'googleapis';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const router = express.Router();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const getGeminiModel = () => {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -39,6 +45,100 @@ const parseMaybeNumber = (value) => {
   if (value === null || value === undefined || value === '') return value;
   const parsed = Number(value);
   return Number.isNaN(parsed) ? value : parsed;
+};
+
+const HISTORY_FILE = path.join(__dirname, 'testcase-history.json');
+
+const readTestcaseHistory = (limit = 10) => {
+  if (!fs.existsSync(HISTORY_FILE)) return [];
+  try {
+    const contents = fs.readFileSync(HISTORY_FILE, 'utf-8');
+    const parsed = JSON.parse(contents);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.slice(-limit);
+  } catch (err) {
+    console.warn('Failed to read testcase history:', err.message);
+    return [];
+  }
+};
+
+const saveTestcaseHistory = (testCase, maxEntries = 20) => {
+  const currentHistory = readTestcaseHistory(maxEntries);
+  const updatedHistory = [...currentHistory, testCase].slice(-maxEntries);
+  fs.writeFileSync(HISTORY_FILE, JSON.stringify(updatedHistory, null, 2), 'utf-8');
+  return updatedHistory;
+};
+
+const clearTestcaseHistory = () => {
+  fs.writeFileSync(HISTORY_FILE, JSON.stringify([], null, 2), 'utf-8');
+};
+
+const getSheetsClient = async () => {
+  const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
+    ? path.resolve(process.cwd(), process.env.GOOGLE_APPLICATION_CREDENTIALS)
+    : path.join(__dirname, 'credentials.json');
+
+  const hasCredentialsFile = credentialsPath && fs.existsSync(credentialsPath);
+  if (hasCredentialsFile) {
+    const auth = new google.auth.GoogleAuth({
+      keyFile: credentialsPath,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+    const client = await auth.getClient();
+    return google.sheets({ version: 'v4', auth: client });
+  }
+
+  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY
+    ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
+    : undefined;
+
+  if (!clientEmail || !privateKey) {
+    throw new Error('Google service account credentials are not configured');
+  }
+
+  const auth = new google.auth.JWT(
+    clientEmail,
+    null,
+    privateKey,
+    ['https://www.googleapis.com/auth/spreadsheets']
+  );
+
+  return google.sheets({ version: 'v4', auth });
+};
+
+const appendTestCaseToSheet = async (testCase) => {
+  const spreadsheetId = process.env.SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error('SPREADSHEET_ID is not configured');
+  }
+
+  const sheets = await getSheetsClient();
+  const values = [
+    testCase.ModuleView || '',
+    testCase.Subject || '',
+    testCase.Scenario || '',
+    testCase.AcceptanceCriteria || '',
+    testCase.Prerequisites || '',
+    testCase.StepsToFollow || '',
+    testCase.ExpectedOutput || '',
+    testCase.ActualOutput || '',
+    testCase.TestType || '',
+    testCase.Priority || '',
+    testCase.TestStatus || '',
+  ];
+
+  const response = await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: 'Sheet1!C6:L6',
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: {
+      values: [values],
+    },
+  });
+
+  return response.data;
 };
 
 const extractFieldOptions = (fields, matchers) => {
@@ -223,6 +323,167 @@ Text: "${cleanedInput}"`;
   } catch (error) {
     console.error('parse-bug error', error.response?.data || error.message);
     res.status(500).json({ error: 'Unable to parse bug description', details: error.response?.data || error.message });
+  }
+});
+
+router.get('/testcase-history', (req, res) => {
+  try {
+    const history = readTestcaseHistory(10);
+    res.json({ success: true, history });
+  } catch (error) {
+    console.error('testcase-history error', error.message);
+    res.status(500).json({ error: 'Unable to load testcase history', details: error.message });
+  }
+});
+
+router.post('/clear-testcase-history', (req, res) => {
+  try {
+    clearTestcaseHistory();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('clear-testcase-history error', error.message);
+    res.status(500).json({ error: 'Unable to clear testcase history', details: error.message });
+  }
+});
+
+router.post('/generate-testcase', async (req, res) => {
+  try {
+    const { scenario } = req.body;
+    if (!scenario || !String(scenario).trim()) {
+      return res.status(400).json({ error: 'scenario is required' });
+    }
+
+    const model = getGeminiModel();
+    const history = readTestcaseHistory(5);
+    const historyContext = history.length
+      ? `Here are the last ${history.length} generated test cases for structure and clarity:\n${history
+          .map((entry, index) => `${index + 1}. ${JSON.stringify(entry)}`)
+          .join('\n')}\n\n`
+      : '';
+
+    const prompt = `You are an expert QA Engineer.
+
+${historyContext}Convert the following software testing scenario into a single valid JSON object with ONLY the following keys:
+
+{
+  "ModuleView": "",
+  "Subject": "",
+  "Scenario": "",
+  "AcceptanceCriteria": "",
+  "Prerequisites": "",
+  "StepsToFollow": "",
+  "ExpectedOutput": "",
+  "ActualOutput": "",
+  "TestType": "",
+  "Priority": "",
+  "TestStatus": ""
+}
+
+Rules:
+
+- Return ONLY valid JSON.
+- Do NOT include markdown, explanations, comments, code fences, or additional text.
+- Use professional QA language suitable for Jira, TestRail, Zephyr, Xray, Google Sheets, and Excel.
+- Keep every field concise and technically accurate.
+
+Field Rules:
+
+1. ModuleView
+- Extract the module or view where the test is performed.
+
+2. Subject
+- Represent the exact feature or functionality being validated.
+
+3. Scenario
+- Begin with words like "Ensure", "Validate", or "Confirm".
+- Never start with "Verify".
+- Keep it concise and generic unless specific values are essential.
+
+4. AcceptanceCriteria
+- Write a single short sentence describing the expected successful behavior.
+
+5. Prerequisites
+- Mention only the required setup, permissions, configurations, or existing records.
+
+6. StepsToFollow
+- Return as ONE single string.
+- Format exactly like:
+  "1. Step one. 2. Step two. 3. Step three."
+- Do NOT use arrays.
+- Do NOT use "\\n", "/n", or multiline text.
+
+7. ExpectedOutput
+- Describe the correct system behavior.
+
+8. ActualOutput
+- For positive scenarios, describe the successful behavior.
+- For negative scenarios, clearly describe the observed issue.
+
+9. TestType
+Choose ONLY one of:
+- "Functionality"
+- "Issue"
+
+Rules:
+- Use "Functionality" for positive validations, successful workflows, enhancements, or expected behavior.
+- Use "Issue" for bugs, failures, incorrect behavior, missing functionality, UI issues, logging issues, validation failures, audit issues, API failures, etc.
+
+10. Priority
+Choose ONLY one of:
+- "Critical"
+- "High"
+- "Medium"
+- "Low"
+
+Priority Guidelines:
+- Critical → Application crash, security issue, data corruption/loss, workflow completely blocked, authentication failure, production blocker.
+- High → Core functionality broken, audit/logging failure, API integration failure, import/export failure, workflow not working, incorrect business logic.
+- Medium → UI issue affecting usability, validation issue, incorrect messages, partial functionality failure, filter/search issue, audit display issue.
+- Low → Cosmetic issue, alignment issue, tooltip issue, spelling mistake, enhancement, minor usability improvement.
+
+11. TestStatus
+Choose ONLY one of:
+- "Passed"
+- "Failed"
+
+Rules:
+- Use "Passed" when the scenario describes expected or successful behavior.
+- Use "Failed" when the scenario describes an observed bug or incorrect behavior.
+
+Additional Rules:
+
+- Preserve module names, field names, API names, events, and technical terminology exactly as provided.
+- Make scenarios generic whenever possible unless specific values are important.
+- Do not invent unnecessary details.
+- Keep the JSON values concise, clear, and professional.
+- Ensure the output is valid JSON that can be parsed directly.
+
+Scenario:
+${String(scenario).trim()}
+`;
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: 'application/json' },
+    });
+
+    const rawText = await result.response.text();
+    const testCase = JSON.parse(rawText);
+    saveTestcaseHistory(testCase);
+    let sheetResult = null;
+    let sheetError = null;
+
+    try {
+      await appendTestCaseToSheet(testCase);
+      sheetResult = 'Saved to spreadsheet successfully.';
+    } catch (sheetWriteError) {
+      console.warn('Spreadsheet write warning:', sheetWriteError.message);
+      sheetError = sheetWriteError.message;
+    }
+
+    res.json({ success: true, data: testCase, sheetResult, sheetError });
+  } catch (error) {
+    console.error('generate-testcase error', error.response?.data || error.message);
+    res.status(500).json({ error: 'Unable to generate testcase', details: error.response?.data || error.message });
   }
 });
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import TopbarBrand from '../components/TopbarBrand';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -35,17 +36,14 @@ const defaultLockedFields = {
 
 export default function BugReporterPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [email] = useState(() => localStorage.getItem('jira_email') || '');
   const [textareaValue, setTextareaValue] = useState('');
 
   useEffect(() => {
-    const savedEmail = localStorage.getItem('jira_email');
-    if (!savedEmail) {
+    if (!email) {
       navigate('/');
-      return;
     }
-    setEmail(savedEmail);
-  }, [navigate]);
+  }, [email, navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem('jira_email');
@@ -54,7 +52,7 @@ export default function BugReporterPage() {
 
   const [formData, setFormData] = useState(blankForm);
   const [metadata, setMetadata] = useState({ components: [], priorities: [], labels: [], accounts: [], bugTypes: [], startDateFieldId: null });
-  const [assigneeSearch, setAssigneeSearch] = useState('');
+  const [, setAssigneeSearch] = useState('');
   const [assigneeResults, setAssigneeResults] = useState([]);
   const [labelDropdownOpen, setLabelDropdownOpen] = useState(false);
   const [loadingParse, setLoadingParse] = useState(false);
@@ -65,7 +63,6 @@ export default function BugReporterPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [lockedFields, setLockedFields] = useState(() => {
     const saved = localStorage.getItem('bugReporterLockedFields');
-    const savedValues = localStorage.getItem('bugReporterLockedValues');
     return saved ? JSON.parse(saved) : { ...defaultLockedFields };
   });
   const [lockedValues, setLockedValues] = useState(() => {
@@ -105,7 +102,7 @@ export default function BugReporterPage() {
       }
     };
     loadMetadata();
-  }, []);
+  }, [lockedFields, lockedValues]);
 
   // Save locked settings to localStorage whenever they change
   useEffect(() => {
@@ -307,19 +304,7 @@ export default function BugReporterPage() {
 
       {/* Add top navigation bar with settings gear icon */}
       <div className="dashboard-topbar">
-        <div className="topbar-brand">
-          <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
-            <rect width="40" height="40" rx="10" fill="url(#logo-grad2)" />
-            <path d="M12 20l5 5 11-11" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-            <defs>
-              <linearGradient id="logo-grad2" x1="0" y1="0" x2="40" y2="40">
-                <stop stopColor="#6366f1"/>
-                <stop offset="1" stopColor="#8b5cf6"/>
-              </linearGradient>
-            </defs>
-          </svg>
-          <span>SimpleCRM</span>
-        </div>
+        <TopbarBrand label="SimpleCRM" />
         <div className="topbar-right">
           <div className="topbar-email">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -344,12 +329,6 @@ export default function BugReporterPage() {
               <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
             </svg>
             Back
-          </button>
-          <button onClick={handleLogout} className="topbar-logout">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
-            Disconnect
           </button>
         </div>
       </div>

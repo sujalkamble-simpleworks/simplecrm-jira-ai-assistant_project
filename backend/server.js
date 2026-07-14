@@ -96,6 +96,32 @@ app.post('/api/admin/env', (req, res) => {
     }
 });
 
+app.get('/api/spreadsheet-id', (req, res) => {
+    try {
+        const entries = readEnvFile(envPath);
+        const sheetEntry = entries.find((entry) => entry.key === 'SPREADSHEET_ID');
+        res.json({ success: true, spreadsheetId: sheetEntry?.value || '' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to read spreadsheet ID', details: error.message });
+    }
+});
+
+app.post('/api/save-spreadsheet', (req, res) => {
+    try {
+        const { spreadsheetId } = req.body || {};
+        if (!spreadsheetId || !String(spreadsheetId).trim()) {
+            return res.status(400).json({ error: 'Spreadsheet ID is required' });
+        }
+
+        updateEnvFile(envPath, 'SPREADSHEET_ID', String(spreadsheetId).trim());
+        dotenv.config({ path: envPath, override: true });
+
+        res.json({ success: true, spreadsheetId: String(spreadsheetId).trim() });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to save spreadsheet ID', details: error.message });
+    }
+});
+
 // Helper to encode Jira Basic Auth
 const getJiraAuthHeader = () => {
     const credentials = `${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`;

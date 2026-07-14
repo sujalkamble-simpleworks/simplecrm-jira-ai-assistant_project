@@ -1,18 +1,40 @@
 import { useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import TopbarBrand from '../components/TopbarBrand';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [email] = useState(() => localStorage.getItem('jira_email') || '');
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const aboutRef = useRef(null);
 
   useEffect(() => {
-    const savedEmail = localStorage.getItem('jira_email');
-    if (!savedEmail) {
+    if (!email) {
       navigate('/');
-      return;
     }
-    setEmail(savedEmail);
-  }, [navigate]);
+  }, [email, navigate]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (aboutOpen && aboutRef.current && !aboutRef.current.contains(event.target)) {
+        setAboutOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape' && aboutOpen) {
+        setAboutOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [aboutOpen]);
 
   const handleLogout = () => {
     localStorage.removeItem('jira_email');
@@ -28,19 +50,7 @@ export default function Dashboard() {
 
       {/* Top bar */}
       <div className="dashboard-topbar">
-        <div className="topbar-brand">
-          <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
-            <rect width="40" height="40" rx="10" fill="url(#logo-grad2)" />
-            <path d="M12 20l5 5 11-11" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-            <defs>
-              <linearGradient id="logo-grad2" x1="0" y1="0" x2="40" y2="40">
-                <stop stopColor="#6366f1"/>
-                <stop offset="1" stopColor="#8b5cf6"/>
-              </linearGradient>
-            </defs>
-          </svg>
-          <span>SimpleCRM</span>
-        </div>
+        <TopbarBrand label="SimpleCRM" />
         <div className="topbar-right">
           <div className="topbar-email">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -100,8 +110,48 @@ export default function Dashboard() {
               </svg>
             </div>
           </div>
+
+          <div className="action-card action-card-active" onClick={() => navigate('/testcases')}>
+            <div className="action-card-icon action-icon-tempo">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 6h16M4 12h16M4 18h16" />
+                <path d="M7 6v12" />
+              </svg>
+            </div>
+            <h2>Testcases generation (for QA)</h2>
+            <p>Generate QA test cases from simple scenario text using AI and structured output.</p>
+            <div className="action-card-footer">
+              <span className="action-badge action-badge-active">Available</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+              </svg>
+            </div>
+          </div>
         </div>
+
       </div>
+
+      <footer className="dashboard-footer">
+        <div ref={aboutRef} className={`about-hover-wrapper ${aboutOpen ? 'about-open' : ''}`}>
+          <button
+            type="button"
+            className="footer-about-label"
+            onClick={() => setAboutOpen((open) => !open)}
+            aria-expanded={aboutOpen}
+            aria-controls="about-card"
+          >
+            About
+          </button>
+          <div className="about-hover-card" id="about-card" role="dialog" aria-hidden={!aboutOpen}>
+            <strong>Sujal Kamble</strong>
+            <p>SDET at Simple Works.</p>
+            <div className="about-links">
+              <a href="https://www.instagram.com/sujallkamble" target="_blank" rel="noreferrer">Instagram</a>
+              <a href="https://www.linkedin.com/in/sujalkamble741" target="_blank" rel="noreferrer">LinkedIn</a>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

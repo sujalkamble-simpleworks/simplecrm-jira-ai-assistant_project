@@ -25,4 +25,4 @@ dist-ssr
 node_modules/
 frontend/node_modules   
 .env
-backend/.env
+backend/.envbackend/credentials.json
