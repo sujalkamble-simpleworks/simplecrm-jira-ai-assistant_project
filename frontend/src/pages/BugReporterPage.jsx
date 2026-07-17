@@ -304,7 +304,7 @@ export default function BugReporterPage() {
 
       {/* Add top navigation bar with settings gear icon */}
       <div className="dashboard-topbar">
-        <TopbarBrand label="SimpleCRM" />
+        <TopbarBrand label="Jira Bug Reporter" />
         <div className="topbar-right">
           <div className="topbar-email">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

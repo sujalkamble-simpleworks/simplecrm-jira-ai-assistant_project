@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url';
 import { google } from 'googleapis';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+//Contains logic for parsing bugs, generating test cases, and interacting with Jira and Google Sheets APIs.
+
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
