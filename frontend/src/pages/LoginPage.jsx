@@ -4,14 +4,21 @@ import axios from 'axios';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!email.trim() || !email.includes('@')) {
       setError('Please enter a valid email address');
+      return;
+    }
+
+    if (!password.trim()) {
+      setError('Please enter your password');
       return;
     }
 
@@ -19,11 +26,18 @@ export default function LoginPage() {
     setError('');
 
     try {
+      const loginResponse = await axios.post('http://localhost:3000/api/login', { email, password });
+      const token = loginResponse?.data?.token;
+
+      if (token) {
+        localStorage.setItem('auth_token', token);
+      }
+
       await axios.post('http://localhost:3000/api/save-email', { email });
       localStorage.setItem('jira_email', email);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to connect. Please try again.');
+      setError(err.response?.data?.error || 'Failed to log in. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -61,7 +75,7 @@ export default function LoginPage() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="login-form">
           <label className="login-label" htmlFor="jira-email">
-            Jira Account Email
+            Email
           </label>
           <div className="input-wrapper">
             <svg className="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -71,11 +85,30 @@ export default function LoginPage() {
             <input
               id="jira-email"
               type="email"
-              placeholder="you@company.atlassian.net"
+              placeholder="you@company.com"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(''); }}
               disabled={loading}
               autoFocus
+              className="login-input"
+            />
+          </div>
+
+          <label className="login-label" htmlFor="user-password">
+            Password
+          </label>
+          <div className="input-wrapper">
+            <svg className="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2"/>
+              <path d="M7 11V7a5 5 0 0110 0v4"/>
+            </svg>
+            <input
+              id="user-password"
+              type="password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError(''); }}
+              disabled={loading}
               className="login-input"
             />
           </div>
@@ -97,15 +130,27 @@ export default function LoginPage() {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
                 </svg>
-                Connect to Jira
+                Login to Workspace
               </>
             )}
           </button>
         </form>
 
         <p className="login-footer">
-          We'll save your email to configure the Jira integration.
+          Use your registered workspace email and password to sign in. We’ll also save the email for your Jira integration.
         </p>
+
+        <div className="login-divider"></div>
+        
+        <button 
+          onClick={() => navigate('/admin')} 
+          className="admin-login-button"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          Login as Administrator
+        </button>
       </div>
     </div>
   );

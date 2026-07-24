@@ -39,6 +39,11 @@ export default function BugReporterPage() {
   const [email] = useState(() => localStorage.getItem('jira_email') || '');
   const [textareaValue, setTextareaValue] = useState('');
 
+  const getUserAuthHeaders = () => {
+    const token = localStorage.getItem('auth_token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   useEffect(() => {
     if (!email) {
       navigate('/');
@@ -73,7 +78,9 @@ export default function BugReporterPage() {
   useEffect(() => {
     const loadMetadata = async () => {
       try {
-        const response = await axios.get('http://localhost:3000/api/jira-metadata');
+        const response = await axios.get('http://localhost:3000/api/jira-metadata', {
+          headers: getUserAuthHeaders(),
+        });
         setMetadata(response.data);
         
         // Apply locked values first, then defaults for unlocked fields
@@ -158,6 +165,8 @@ export default function BugReporterPage() {
       const response = await axios.post('http://localhost:3000/api/parse-bug', {
         userInput: textareaValue,
         metadata,
+      }, {
+        headers: getUserAuthHeaders(),
       });
 
       const mapAccountValueToId = (value) => {
@@ -236,7 +245,9 @@ export default function BugReporterPage() {
     }
 
     try {
-      const response = await axios.get(`http://localhost:3000/api/user-search?q=${encodeURIComponent(value)}`);
+      const response = await axios.get(`http://localhost:3000/api/user-search?q=${encodeURIComponent(value)}`, {
+        headers: getUserAuthHeaders(),
+      });
       setAssigneeResults(response.data);
     } catch (err) {
       console.error('Assignee search failed', err.message || err);
@@ -287,7 +298,9 @@ export default function BugReporterPage() {
         startDateFieldId: metadata.startDateFieldId,
       };
 
-      const response = await axios.post('http://localhost:3000/api/create-bug', payload);
+      const response = await axios.post('http://localhost:3000/api/create-bug', payload, {
+        headers: getUserAuthHeaders(),
+      });
       setSubmitResult(response.data);
     } catch (err) {
       setError(err.response?.data?.details || err.response?.data?.error || err.message || 'Failed to create bug.');

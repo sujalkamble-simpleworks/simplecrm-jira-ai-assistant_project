@@ -5,6 +5,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { google } from 'googleapis';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import authMiddleware from './authMiddleware.js';
+import { getUserIntegrations } from './getUserIntegrations.js';
 
 //Contains logic for parsing bugs, generating test cases, and interacting with Jira and Google Sheets APIs.
 
@@ -21,17 +23,6 @@ const getGeminiModel = () => {
   return genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 };
 
-const getJiraAuthHeader = () => {
-  const credentials = `${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`;
-  return `Basic ${Buffer.from(credentials).toString('base64')}`;
-};
-
-const jiraHeaders = () => ({
-  Authorization: getJiraAuthHeader(),
-  Accept: 'application/json',
-  'Content-Type': 'application/json',
-});
-
 const safeText = (text) => String(text)
   .replace(/\\/g, '\\\\')
   .replace(/"/g, '\\"')
@@ -47,32 +38,6 @@ const parseMaybeNumber = (value) => {
   if (value === null || value === undefined || value === '') return value;
   const parsed = Number(value);
   return Number.isNaN(parsed) ? value : parsed;
-};
-
-const HISTORY_FILE = path.join(__dirname, 'testcase-history.json');
-
-const readTestcaseHistory = (limit = 10) => {
-  if (!fs.existsSync(HISTORY_FILE)) return [];
-  try {
-    const contents = fs.readFileSync(HISTORY_FILE, 'utf-8');
-    const parsed = JSON.parse(contents);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.slice(-limit);
-  } catch (err) {
-    console.warn('Failed to read testcase history:', err.message);
-    return [];
-  }
-};
-
-const saveTestcaseHistory = (testCase, maxEntries = 20) => {
-  const currentHistory = readTestcaseHistory(maxEntries);
-  const updatedHistory = [...currentHistory, testCase].slice(-maxEntries);
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(updatedHistory, null, 2), 'utf-8');
-  return updatedHistory;
-};
-
-const clearTestcaseHistory = () => {
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify([], null, 2), 'utf-8');
 };
 
 const getSheetsClient = async () => {
@@ -153,6 +118,18 @@ const extractFieldOptions = (fields, matchers) => {
   return field.allowedValues.map((option) => ({ id: option.id, value: option.value }));
 };
 
+const normalizeDescriptionField = (text) => {
+  const value = String(text || '').trim();
+  if (!value) {
+    return '';
+  }
+
+  const withoutLeadingTitle = value.replace(/^\s*Description\s*:\s*/i, '');
+  const withBlankLineBeforeSections = withoutLeadingTitle.replace(/\n\s*(Expected Result|Actual Result)\s*:/gi, '\n\n$1:');
+
+  return withBlankLineBeforeSections.trim();
+};
+
 const makeAtlassianDocument = (text) => {
   const lines = String(text || '').split('\n');
   const content = [];
@@ -184,28 +161,57 @@ const makeAtlassianDocument = (text) => {
   return { type: 'doc', version: 1, content };
 };
 
-router.get('/jira-metadata', async (req, res) => {
+/**
+ * Builds Jira request headers from per-user credentials.
+ * @param {Object} userCreds - The user's integration row from the DB.
+ * @returns {Object} Headers object for Axios Jira requests.
+ */
+const buildJiraHeaders = (userCreds) => {
+  const credentials = `${userCreds.jira_email}:${userCreds.jira_api_token}`;
+  return {
+    Authorization: `Basic ${Buffer.from(credentials).toString('base64')}`,
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+};
+
+router.get('/jira-metadata', authMiddleware, async (req, res) => {
   try {
+    const userCreds = await getUserIntegrations(req.user_id);
+
+    if (!userCreds.jira_domain || !userCreds.jira_api_token) {
+      return res.status(400).json({ error: 'Please configure your Jira integration first.' });
+    }
+
+    const headers = buildJiraHeaders(userCreds);
+    const projectKey = userCreds.jira_project_key;
+
     const componentsResponse = await axios.get(
-      `https://${process.env.JIRA_DOMAIN}/rest/api/3/project/${process.env.JIRA_PROJECT_KEY}/components`,
-      { headers: jiraHeaders() }
+      `https://${userCreds.jira_domain}/rest/api/3/project/${projectKey}/components`,
+      { headers }
     );
 
     const prioritiesResponse = await axios.get(
-      `https://${process.env.JIRA_DOMAIN}/rest/api/3/priority`,
-      { headers: jiraHeaders() }
+      `https://${userCreds.jira_domain}/rest/api/3/priority`,
+      { headers }
     );
 
     const labels = ['bug', 'ui-glitch', 'high-priority', 'regression', 'blocking', 'needs-investigation'];
 
     const createMetaResponse = await axios.get(
-      `https://${process.env.JIRA_DOMAIN}/rest/api/3/issue/createmeta?projectKeys=${process.env.JIRA_PROJECT_KEY}&issuetypeNames=Bug&expand=projects.issuetypes.fields`,
-      { headers: jiraHeaders() }
+      `https://${userCreds.jira_domain}/rest/api/3/issue/createmeta?projectKeys=${projectKey}&issuetypeNames=Bug&expand=projects.issuetypes.fields`,
+      { headers }
     );
 
     const fields = createMetaResponse.data.projects?.[0]?.issuetypes?.[0]?.fields || {};
+    const issueTypeOptions = (createMetaResponse.data.projects?.[0]?.issuetypes || []).map((issueType) => ({
+      id: issueType.id,
+      value: issueType.name,
+    }));
     const accountOptions = extractFieldOptions(fields, ['account', 'customer', 'organization', 'company']);
-    const bugTypeOptions = extractFieldOptions(fields, ['bug type', 'issue type', 'type']);
+    const bugTypeOptions = extractFieldOptions(fields, ['bug type', 'issue type', 'type']).length
+      ? extractFieldOptions(fields, ['bug type', 'issue type', 'type'])
+      : issueTypeOptions;
     const startDateFieldEntry = Object.entries(fields).find(([, field]) => field?.name?.toLowerCase().includes('start date'));
     const startDateFieldId = startDateFieldEntry ? startDateFieldEntry[0] : null;
 
@@ -219,20 +225,23 @@ router.get('/jira-metadata', async (req, res) => {
     });
   } catch (error) {
     console.error('jira-metadata error', error.response?.data || error.message);
-    res.status(500).json({ error: 'Unable to load Jira metadata', details: error.response?.data || error.message });
+    res.status(error.statusCode || 500).json({ error: 'Unable to load Jira metadata', details: error.response?.data || error.message });
   }
 });
 
-router.get('/user-search', async (req, res) => {
+router.get('/user-search', authMiddleware, async (req, res) => {
   try {
     const query = String(req.query.q || '').trim();
     if (!query) {
       return res.json([]);
     }
 
+    const userCreds = await getUserIntegrations(req.user_id);
+    const headers = buildJiraHeaders(userCreds);
+
     const response = await axios.get(
-      `https://${process.env.JIRA_DOMAIN}/rest/api/3/user/search?query=${encodeURIComponent(query)}&maxResults=20`,
-      { headers: jiraHeaders() }
+      `https://${userCreds.jira_domain}/rest/api/3/user/search?query=${encodeURIComponent(query)}&maxResults=20`,
+      { headers }
     );
 
     res.json(response.data.map((user) => ({
@@ -243,11 +252,11 @@ router.get('/user-search', async (req, res) => {
     })));
   } catch (error) {
     console.error('user-search error', error.response?.data || error.message);
-    res.status(500).json({ error: 'Unable to search Jira users', details: error.response?.data || error.message });
+    res.status(error.statusCode || 500).json({ error: 'Unable to search Jira users', details: error.response?.data || error.message });
   }
 });
 
-router.post('/parse-bug', async (req, res) => {
+router.post('/parse-bug', authMiddleware, async (req, res) => {
   try {
     const { userInput, metadata } = req.body;
     if (!userInput) return res.status(400).json({ error: 'userInput is required' });
@@ -272,14 +281,16 @@ Acceptance Criteria in acceptanceCriteria section only
 Steps to Reproduce in stepsToReproduce section only
 
 Formatting Rules:
- dont add the heading of JSON  below in text
- Use plain text titles (no **markdown**). Examples: Description:, Expected Result:, Actual Result:, Acceptance Criteria:, Steps to Reproduce:
- Do not add horizontal lines
-Keep language simple and professional
-Do not change bug meaning
-Add numbering in Steps to Reproduce
-Keep Acceptance Criteria clear and measurable
-Do not add extra sections unless provided and also add expected and actual result inside description field
+- Do not include the literal heading "Description:" at the start of the description field.
+- Start the description field directly with the description paragraph.
+- If Expected Result and Actual Result exist, keep them in the same description field and place one blank line between the description paragraph and the Expected Result / Actual Result sections.
+- Use plain text labels only for the section names inside the description field, for example: Expected Result:, Actual Result:
+- Do not add horizontal lines
+- Keep language simple, technical and professional
+- Do not change bug meaning
+- Add numbering in Steps to Reproduce
+- Keep Acceptance Criteria clear and measurable
+- Do not add extra sections unless provided
 
 Return JSON only in this exact schema:
 {
@@ -318,47 +329,30 @@ Text: "${cleanedInput}"`;
 
     const rawJson = await extractResult.response.text();
     const parsed = JSON.parse(rawJson);
+    parsed.description = normalizeDescriptionField(parsed.description);
     parsed.labels = normalizeArray(parsed.labels);
     parsed.linkedWorkType = parsed.linkedWorkType || 'blocks';
 
     res.json(parsed);
   } catch (error) {
     console.error('parse-bug error', error.response?.data || error.message);
-    res.status(500).json({ error: 'Unable to parse bug description', details: error.response?.data || error.message });
+    res.status(error.statusCode || 500).json({ error: 'Unable to parse bug description', details: error.response?.data || error.message });
   }
 });
 
-router.get('/testcase-history', (req, res) => {
+router.post('/generate-testcase', authMiddleware, async (req, res) => {
   try {
-    const history = readTestcaseHistory(10);
-    res.json({ success: true, history });
-  } catch (error) {
-    console.error('testcase-history error', error.message);
-    res.status(500).json({ error: 'Unable to load testcase history', details: error.message });
-  }
-});
-
-router.post('/clear-testcase-history', (req, res) => {
-  try {
-    clearTestcaseHistory();
-    res.json({ success: true });
-  } catch (error) {
-    console.error('clear-testcase-history error', error.message);
-    res.status(500).json({ error: 'Unable to clear testcase history', details: error.message });
-  }
-});
-
-router.post('/generate-testcase', async (req, res) => {
-  try {
-    const { scenario } = req.body;
+    const { scenario, history } = req.body;
     if (!scenario || !String(scenario).trim()) {
       return res.status(400).json({ error: 'scenario is required' });
     }
 
     const model = getGeminiModel();
-    const history = readTestcaseHistory(5);
-    const historyContext = history.length
-      ? `Here are the last ${history.length} generated test cases for structure and clarity:\n${history
+
+    // Build history context from client-provided history array
+    const safeHistory = Array.isArray(history) ? history.slice(-5) : [];
+    const historyContext = safeHistory.length
+      ? `Here are the last ${safeHistory.length} generated test cases for structure and clarity:\n${safeHistory
           .map((entry, index) => `${index + 1}. ${JSON.stringify(entry)}`)
           .join('\n')}\n\n`
       : '';
@@ -412,7 +406,7 @@ Field Rules:
 - Format exactly like:
   "1. Step one. 2. Step two. 3. Step three."
 - Do NOT use arrays.
-- Do NOT use "\\n", "/n", or multiline text.
+- Do NOT use "\\\\n", "/n", or multiline text.
 
 7. ExpectedOutput
 - Describe the correct system behavior.
@@ -470,7 +464,7 @@ ${String(scenario).trim()}
 
     const rawText = await result.response.text();
     const testCase = JSON.parse(rawText);
-    saveTestcaseHistory(testCase);
+
     let sheetResult = null;
     let sheetError = null;
 
@@ -485,11 +479,11 @@ ${String(scenario).trim()}
     res.json({ success: true, data: testCase, sheetResult, sheetError });
   } catch (error) {
     console.error('generate-testcase error', error.response?.data || error.message);
-    res.status(500).json({ error: 'Unable to generate testcase', details: error.response?.data || error.message });
+    res.status(error.statusCode || 500).json({ error: 'Unable to generate testcase', details: error.response?.data || error.message });
   }
 });
 
-router.post('/create-bug', async (req, res) => {
+router.post('/create-bug', authMiddleware, async (req, res) => {
   try {
     const {
       summary,
@@ -512,11 +506,20 @@ router.post('/create-bug', async (req, res) => {
       return res.status(400).json({ error: 'summary and component are required' });
     }
 
+    // Fetch per-user Jira credentials
+    const userCreds = await getUserIntegrations(req.user_id);
+
+    if (!userCreds.jira_domain || !userCreds.jira_api_token) {
+      return res.status(400).json({ error: 'Please configure your Jira integration first.' });
+    }
+
+    const headers = buildJiraHeaders(userCreds);
+
     const resolvedStartDate = startDate || new Date().toISOString().split('T')[0];
-    const descriptionString = `${description || ''}\n\nSteps to Reproduce:\n${stepsToReproduce || ''}\n\nAcceptance Criteria:\n${acceptanceCriteria || ''}`;
+    const descriptionString = description || '';
 
     const fields = {
-      project: { key: process.env.JIRA_PROJECT_KEY },
+      project: { key: userCreds.jira_project_key },
       summary,
       description: makeAtlassianDocument(descriptionString),
       issuetype: { name: 'Bug' },
@@ -535,20 +538,20 @@ router.post('/create-bug', async (req, res) => {
     if (assigneeAccountId) {
       fields.assignee = { accountId: assigneeAccountId };
     }
-    if (process.env.JIRA_REPORTER_ACCOUNT_ID) {
-      fields.reporter = { accountId: process.env.JIRA_REPORTER_ACCOUNT_ID };
+    if (userCreds.jira_reporter_account_id) {
+      fields.reporter = { accountId: userCreds.jira_reporter_account_id };
     }
 
     const issuePayload = { fields: Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined && value !== null)) };
 
     const issueResponse = await axios.post(
-      `https://${process.env.JIRA_DOMAIN}/rest/api/3/issue`,
+      `https://${userCreds.jira_domain}/rest/api/3/issue`,
       issuePayload,
-      { headers: jiraHeaders() }
+      { headers }
     );
 
     const issueKey = issueResponse.data.key;
-    const issueUrl = `https://${process.env.JIRA_DOMAIN}/browse/${issueKey}`;
+    const issueUrl = `https://${userCreds.jira_domain}/browse/${issueKey}`;
 
     if (linkedWorkItem) {
       const knownLinks = {
@@ -559,20 +562,20 @@ router.post('/create-bug', async (req, res) => {
 
       const linkConfig = knownLinks[linkedWorkType] || knownLinks.blocks;
       await axios.post(
-        `https://${process.env.JIRA_DOMAIN}/rest/api/3/issueLink`,
+        `https://${userCreds.jira_domain}/rest/api/3/issueLink`,
         {
           type: { name: linkConfig.typeName },
           inwardIssue: linkConfig.inwardIssue,
           outwardIssue: linkConfig.outwardIssue,
         },
-        { headers: jiraHeaders() }
+        { headers }
       );
     }
 
     res.json({ success: true, issueKey, issueUrl });
   } catch (error) {
     console.error('create-bug error', error.response?.data || error.message);
-    res.status(500).json({ error: 'Unable to create Jira bug', details: error.response?.data || error.message });
+    res.status(error.statusCode || 500).json({ error: 'Unable to create Jira bug', details: error.response?.data || error.message });
   }
 });
 
